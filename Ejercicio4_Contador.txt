@@ -1,0 +1,203 @@
+;-------------------------------------------------------------------------------------------------
+;Este programa le pide al usuario un texto el cual termina si el usuario toca 2 veces Ctrl+D o si
+;el usuario toca enter y Ctrl+D. El programa tiene un arreglo que sirve como un diccionario de 
+;python el cual cada clave es el valor ASCII del caracter y su valor es el numero de veces que 
+;aparece en el texto. El programa no recibe el texto y luego lee, sino que por cada caracter que
+;se va digitando va aumentando en el diccionario el valor de apariciones. Luego de ingresar el 
+;texto el programa le dara a escoger entre modo con distincion y sin distincion entre mayusculas
+;y minusculas, dependiendo del modo escogido el programa le desglozara la caracteres presentes 
+;en el texto y su cantidad de apariciones.
+;-------------------------------------------------------------------------------------------------
+
+%include 'io.mac'          ; Incluye la librería io.mac
+
+.DATA
+    msg_inicio      db "Ingrese el texto:", 0                            ;Mensaje que indica ingresar texto
+    msg_condicion   db "Para terminar de ingresar texto toque", 0        ;Primera parte mensaje de condicion
+    msg_condicion_2 db "CTRL+D 2 veces seguidas", 0                      ;Segunda parte mensaje de condicion
+    msg_condicion_3 db "O toque enter y luego CTRL+D", 0                 ;Tercera parte mensaje de condicion
+    msg_modo        db "Seleccione el modo de conteo:", 0                ;Mensaje para seleccionar el modo
+    msg_modo_1      db "1. Con distinción de mayúsculas y minúsculas", 0 ;Mensaje modo distincion
+    msg_modo_2      db "2. Sin distinción de mayúsculas y minúsculas", 0 ;Mensaje modo no distincion
+    msg_opcion      db "Opción: ", 0                                     ;Mensaje para digitar la opcion
+    msg_invalido    db "Opción no válida.", 0                            ;Mensaje si la opcion no es valida
+    msg_conteo      db "Resultado del conteo:", 0                        ;Mensaje para mostrar los resultados
+    espacio         db "Espacio", 0                                      ;Mensaje para imprimir espacios
+    tab             db "Tabulacion", 0                                   ;Mensaje para imprimir tabs
+    nueva_linea     db "Nueva Línea", 0                                  ;Mensaje para imprimir enters
+    DosPuntos       db ": ", 0                                           ;Son : separa letra de conteo
+
+.UDATA
+    conteo        resd 256     ;Arreglo para contar cada caracter del ASCII (0-255) o 2^8
+    opcion        resb 2       ;Aca se guardara la opcion del usuario 
+    char_actual   resb 1       ;Aca se va a guardar el caracter que se va a estar leyendo 
+
+.CODE
+    PutStr  msg_condicion       ;Se pone el mensaje con las condiciones para parar de escribir texto
+    nwln                        ;Salto de linea
+    PutStr  msg_condicion_2     ;Aca se pone la otra condicion de parada
+    nwln                        ;Salto de linea
+    PutStr  msg_inicio          ;Se pone el mensaje que recibe el texto
+    nwln                        ;Salto de linea
+
+;Lectura de caracteres hasta EOF, no lo hice con GetStr porque mandaba el mensaje tocando enter
+;lo cual no me servia si queria leer el enter como un caracter y tambien para la solucion de mi
+;codigo me era mas viable esta opcion para ir aumemtando los contadores por cada caracter
+;Aca se dejo los registros con la informacion lista para que el kernel pueda ejecitar la interrupción
+
+leer:
+    mov     eax, 3             	;Esto es para llamar al sys_call
+    mov     ebx, 0             	;Deja el descriptor de archivo para el stdin (teclado)
+    lea     ecx, [char_actual] 	;Almacena en ECX la direccion de la variable para guardar un caracter
+    mov     edx, 1             	;Deja el EDX en 1 para leer solo un byte
+    int     0x80               	;Llamada a las interrupciones del sistema (kernel)
+
+;Aca hace el proceso para comparar con el EOF
+    cmp     eax, 0                  ;Compara el caracter para ver si es EOF
+    je      fin_lectura             ;Si es EOF deja de leer caracteres
+    mov     al, [char_actual]       ;Guarda en AL el caracter leido
+    movzx   edx, al                 ;Copia el valor en bits del caracter rellenando con ceros a la izquierda
+    inc     dword [conteo + edx*4]  ;Incrementa el contador en la posicion correspondiente al valor del caracter 
+    jmp     leer                    ;Repite el proceso de lectura de un caracter
+
+fin_lectura:
+    nwln                            ;Salto de linea
+
+;Aca se le pregunta al usuario por el modo que desea 
+bucle_modo:
+    PutStr  msg_modo    ;Enseña la primera parte del mensaje de moodo
+    nwln                ;Nueva linea
+    PutStr  msg_modo_1  ;Enseña la primera parte del mensaje de moodo
+    nwln                ;Nueva linea
+    PutStr  msg_modo_2  ;Enseña la primera parte del mensaje de moodo
+    nwln                ;Nueva linea
+    PutStr  msg_opcion  ;Enseña el mensaje para que el usuario ponga la opcion
+    GetStr  opcion, 2   ;Leer opción del usuario
+
+;Lee la opcion
+    mov     al, [opcion]            ;Mueve al AL la opcion ingresada    
+    cmp     al, '1'                 ;Compara si la opcion es 1
+    je      modo_distincion         ;Si es 1, salta al modo diferenciacion
+    cmp     al, '2'                 ;Compara si la opcion es 2
+    je      modo_NOdistincion       ;Si es 2, salta al modo sin diferenciacion
+    PutStr  msg_invalido            ;Si la opcion no es ni 1 ni 2 pone el mensaje de error
+    nwln                            ;Salto de linea
+    nwln                            ;Salto de linea
+    jmp     bucle_modo              ;Vuelve a repetir el proceso de pedir el modo al usuario
+
+;En esta parte del programa se ve el proceso para ambos modos, intente hacerlo con un solo codigo
+;y una bandera para que hiciera acciones diferentes dependiendo del modo, pero se me dificulto
+;En cambio hice 2 procesos muy similares pero totalmente apartes CD=Con distincion SD=Sin distincion
+
+;Modo con distincion
+modo_distincion:
+    PutStr  msg_conteo        ;Pone el mensaje del resultado del conteo
+    nwln                      ;Salto de linea
+    mov     ecx, 0            ;Pone el contador en 0 para empezar desde la primera posicion del arreglo
+
+;Seccion de impresion de los caracteres y sus conteos
+imprimir_CD:
+    cmp     ecx, 256                ;Compara el ECX con 256 para saber si ya llego al final del arreglo
+    je      fin_programa            ;Si es el caso salta al final del programa
+    mov     eax, [conteo + ecx*4]   ;Obtener conteo
+    test    eax, eax                ;Verifica si el valor de la casilla es 0
+    jz      siguiente_CD            ;Si es 0, salta a la siguiente posicion para no imprimir nada
+
+    ;Aca primero hace la comparacion con los carcacteres no imprimibles
+    cmp     ecx, 10             ;Verifica si es un enter
+    je      poner_nueva_linea   ;Imprime la palabra Nueva linea
+    cmp     ecx, 9              ;Verifica si es una tabulacion
+    je      poner_tab           ;Imprime la palabra tabulacion
+    cmp     ecx, 32             ;Verifica si es un espacio
+    je      poner_espacio       ;Imprime la palabra espacio
+    PutCh   cl                  ;Imprime el caracter, utiliza CL ya que mide 1Byte que es lo que mide el char
+    jmp     poner_conteo_CD     ;Salta a la seccion de imprimir el conteo del caracter
+
+;Seccion de impresion de caracteres que no se ven 
+poner_nueva_linea:
+    PutStr  nueva_linea         ;Escribe la palabra nueva linea
+    jmp     poner_conteo_CD     ;Salta a la seccion de imprimir el conteo
+poner_tab:
+    PutStr  tab                 ;Escribe la palabra tabulacion
+    jmp     poner_conteo_CD     ;Salta a la seccion de imprimir el conteo
+poner_espacio:
+    PutStr  espacio             ;Escribe la palabra espacio
+    jmp     poner_conteo_CD     ;Salta a la seccion de imprimir el conteo
+
+;Seccion de imprimir el conteo del caracter
+poner_conteo_CD:
+    PutStr  DosPuntos   ;Escribe :
+    PutLInt eax         ;Pone el valor de la casilla del arreglo, la cual corresponde a las apariciones del char
+    nwln                ;Salto de linea
+
+siguiente_CD:
+    inc     ecx             ;Incrementa el ECX para que pase a la siguiente casilla
+    jmp     imprimir_CD     ;Vuelve a realizar todo el proceso de impresion, ahora en la siguiente casilla
+
+;Modo sin distincion
+modo_NOdistincion:
+    PutStr  msg_conteo        ;Pone el mensaje del resultado del conteo
+    nwln                      ;Salto de linea
+    mov     ecx, 0            ;Pone el contador en 0 para empezar desde la primera posicion del arreglo
+
+;Seccion de impresion de los caracteres y sus conteos
+imprimir_SD:
+    cmp     ecx, 256                ;Compara el ECX con 256 para saber si ya llego al final del arreglo
+    je      fin_programa            ;Si es el caso salta al final del programa
+
+    ;Proceso de deteccion de mayusculas
+    mov     eax, ecx            ;Mueve el valor del caracter al EAX
+    cmp     al, 'A'             ;Compara con la A, usa AL porque es lo que mide el char 1Byte
+    jl      procesar_SD         ;Si es menor que el valor de A no es mayuscula
+    cmp     al, 'Z'             ;Compara con la Z, usa AL porque es lo que mide el char 1Byte
+    jg      procesar_SD         ;Si es menor que el valor de Z no es mayuscula
+    jmp     siguiente_SD        ;Si es mayúscula, saltar
+
+procesar_SD:
+    mov     eax, [conteo + ecx*4] 	;Obtiene el valor del conteo en la poscion del arreglo
+    mov     edx, ecx              	;Copia el valor de ECX en EDX para que no se pierda
+    cmp     dl, 'a'               	;Compara con el valor de a
+    jl      verificar_SD          	;Si es menor que a no es minuscula
+    cmp     dl, 'z'               	;Compara con el valor de z
+    jg      verificar_SD          	;Si es mayor no es minuscula
+    sub     edx, 32               	;Restar al valor de la minuscula 32 para obtener la mayuscula
+    add     eax, [conteo + edx*4] 	;Al conteo de la letra minuscula le suma el de su mayusucla para juntarlos
+
+verificar_SD:
+    test    eax, eax                ;Verifica si el valor de la casilla es 0
+    jz      siguiente_SD            ;Si es 0, salta a la siguiente posicion para no imprimir nada
+
+    ;Aca primero hace la comparacion con los carcacteres no imprimibles
+    cmp     ecx, 10             ;Verifica si es un enter
+    je      poner_SD_nl         ;Imprime la palabra Nueva linea
+    cmp     ecx, 9              ;Verifica si es una tabulacion
+    je      poner_SD_tab        ;Imprime la palabra tabulacion
+    cmp     ecx, 32             ;Verifica si es un espacio
+    je      poner_SD_space      ;Imprime la palabra espacio
+    PutCh   cl                  ;Imprime el caracter, utiliza CL ya que mide 1Byte que es lo que mide el char
+    jmp     poner_SD_count      ;Salta a la seccion de imprimir el conteo del caracter
+
+;Seccion de impresion de caracteres que no se ven 
+poner_SD_nl:
+    PutStr  nueva_linea         ;Escribe la palabra nueva linea
+    jmp     poner_SD_count      ;Salta a la seccion de imprimir el conteo
+poner_SD_tab:
+    PutStr  tab                 ;Escribe la palabra tabulacion
+    jmp     poner_SD_count      ;Salta a la seccion de imprimir el conteo
+poner_SD_space:
+    PutStr  espacio             ;Escribe la palabra espacio
+    jmp     poner_SD_count      ;Salta a la seccion de imprimir el conteo
+
+;Seccion de imprimir el conteo del caracter
+poner_SD_count:
+    PutStr  DosPuntos   ;Escribe :
+    PutLInt eax         ;Pone el valor de la casilla del arreglo, la cual corresponde a las apariciones del char
+    nwln                ;Salto de linea
+
+siguiente_SD:
+    inc     ecx            ;Incrementa el ECX para que pase a la siguiente casilla
+    jmp     imprimir_SD    ;Vuelve a realizar todo el proceso de impresion, ahora en la siguiente casilla
+
+fin_programa:
+    nwln               ;Salto de linea
+.EXIT

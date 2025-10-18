@@ -1,0 +1,87 @@
+;-------------------------------------------------------------------------------------
+;Este codigo le solicita al usuario una palabra de maximo 200 caracteres, luego con
+;los punteros esi y edi se recorre la palabra comparando las letras del principio con 
+;las del final para ver si la palabra es un palindromo, no sin antes converitr las 
+;mayusculas a minusculas para que la comparacion no falle y asi el programa pueda
+;trabajar con mayusculas y minusculas. Al finalizar la comparacion el progrma emite
+;un mensaje de si la palabra fue palindromo o no
+;-------------------------------------------------------------------------------------
+
+%include "io.mac"           ;Incluye la librería del libro de Sivarama
+
+.DATA
+    mensaje         db "Digite una cadena: ",0        ;Msj para pedir al usuario la cadena
+    Sipalindromo    db "Si es palindromo.",0          ;Msj Si es palindormo
+    NOpalindromo    db "No es palindromo.",0          ;Msj No es palíndromo
+    largo           dd 0                              ;Variable para guardar el largo de la cadena
+
+.UDATA
+    linea resb 201         ;Reservar 201 bytes para la cadena ya que se cuenta el null del final
+
+.CODE
+    PutStr mensaje          ;Pide al usuario la cadena"
+    nwln                    ;Salto de línea
+    GetStr linea, 200       ;Recibe MAX 200 caracteres y los guarda en linea
+
+    ;Calcular longitud de la cadena
+    mov esi, linea         ;ESI apunta al inicio de la linea
+    mov ecx, 0             ;Se limpia ECX para que sea el contador de caracteres
+
+contar:
+    cmp byte [esi], 0       ;Compara el byte actual con el de nulo
+    je fin_contar           ;Si es nulo, salta a fin_contar
+    inc esi                 ;Sig carcater
+    inc ecx                 ;Incrementa contador
+    jmp contar              ;Se devuelve para repetir el ciclo
+
+fin_contar:
+    mov [largo], ecx          ;Almacena la longitud en largo
+    mov esi, linea            ;ESI apunta al inicio de la cadena
+    mov edi, linea            ;EDI apunta al final de la linea
+    add edi, [largo]          ;EDI ahora apunta al final de la cadena (nulo)
+    dec edi                   ;Se resta el EDI para que ahora apunte a una letra
+
+;Verificar si ya es palindromo con la posicion de los punteros
+es_palindromo:
+    cmp esi, edi             ;Si los punteros estan en la misma posicion ya es palindromo
+    jge si_palindromo        ;Si ESI es >= que EDI es porque estan en la misma posicion o ya se cruzaron
+    mov al, [esi]            ;Guarda en AL el caracter por la izq
+    mov bl, [edi]            ;Guarda en BL el caracter por la der
+
+    ;Convertir AL a minúscula si está entre 'A' y 'Z' (segun la tabla ascii)
+    cmp al, 'A'              ;Compara el caracter con la letra A mayuscula
+    jl no_converitrAL        ;Si AL < 'A', ya es minuscula, no lo convierte
+    cmp al, 'Z'              ;Compara el caracter con la letra Z mayuscula
+    jg no_converitrAL        ;Si AL > 'Z', no es una letra no lo convierte
+    add al, 32               ;Convierte mayúscula a minúscula la letra del AL
+
+;Convertir BL a minúscula si está entre 'A' y 'Z' (segun la tabla ascii)
+no_converitrAL:
+    cmp bl, 'A'              ;Compara el caracter con la letra A mayuscula
+    jl no_convertirBL        ;Si BL < 'A', no convertir, ya es minuscula, no lo convierte
+    cmp bl, 'Z'              ;Compara el caracter con la letra Z mayuscula
+    jg no_convertirBL        ;Si BL > 'Z', no convertir, no es una letra no lo convierte
+    add bl, 32               ;Convierte mayúscula a minúscula la letra del BL
+
+;Cuando ya convirtio los caracteres los compara 
+no_convertirBL:
+    cmp al, bl               ;Comparar los caracteres en su nueva forma de minuscula
+    jne no_palindromo        ;Si son diferentes, ya no es palíndromo
+    inc esi                  ;El puntero del inicio de la linea avanza una posicion
+    dec edi                  ;El puntero del final de la linea retrocede una posicion
+    jmp es_palindromo        ;Repetir todo el proceso de verificacion, conversion de letras y compsrscion
+
+;Si es palindromo
+si_palindromo:
+    nwln                     ;Salto de línea
+    PutStr Sipalindromo      ;Muestra el Msj "Si es palindromo."
+    jmp salir                ;Este salto es importante para que no se ejecute el bloque de no palindromo 
+
+;No es palindromo
+    no_palindromo:
+    nwln                     ;Salto de línea
+    PutStr NOpalindromo      ;Muestra el Msj "No es palindromo."
+
+salir:
+    nwln                     ;Salto de línea para que no se pegue el mensaje de la terminal
+.EXIT                        ;Termina el programa
